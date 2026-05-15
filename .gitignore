@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+phase0/data/
+phase0/REPORT.md
+.venv/
+venv/

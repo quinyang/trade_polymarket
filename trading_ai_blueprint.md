@@ -52,6 +52,7 @@ not have one.
 
 | Edge source | Why it can persist | What the bot must do well |
 |---|---|---|
+| **Optimism tax / longshot-flow capture (maker)** — *strongest documented, see §0.3* | Takers systematically overpay for cheap "YES" longshots chasing big payoffs. You sell into that flow as a fee-free maker. Behavioral, not informational, so it is durable. | Post passive limit orders on the cheap side of biased flow; manage inventory + adverse selection. **No forecast required.** |
 | **Speed / news latency** | Markets reprice on injuries, lineups, weather, headlines with a lag. A bot can react in seconds. | Low-latency news ingestion + fast order placement. Most defensible automated edge. |
 | **Cross-venue line shopping** | The same event is priced differently across venues. | Connect to multiple venues; always take the best price; detect true arbitrage. |
 | **Thin / newly-opened markets** | The crowd has not yet aggregated; prices are stale. Edge decays as liquidity arrives. | Trade early, trade small, exit before the crowd catches up. Tension with the liquidity floor — see §6.1. |
@@ -65,6 +66,10 @@ You are not bound to any one venue. Choose venues the way you choose a model.
 - **Fee structure dominates.** Prefer venues with maker rebates or no maker
   fee, or commission charged only on net winnings. Being a *maker* (posting
   limit orders) instead of a *taker* can turn the largest cost into income.
+  Concretely, on Polymarket (2026) **makers pay zero trading fees and can earn
+  rebates**, while takers pay roughly 0.75% (sports) to 1.8% (crypto), peaking
+  near a 0.50 price. This single fact is why the maker edge in §0.3 survives
+  fees while a directional taker edge usually does not.
 - **Liquidity vs. edge trade-off.** Deep venues are efficient (low edge, low
   slippage); thin venues have edge but high slippage and manipulation risk.
   Decide deliberately which side of this you are exploiting.
@@ -73,6 +78,55 @@ You are not bound to any one venue. Choose venues the way you choose a model.
   centrally; betting exchanges resolve fast. Model this as a real cost.
 - **Operational reality.** On-chain venues require a funded wallet, gas, and
   have geographic restrictions; treat them as more than "a REST API."
+
+### 0.3 The strongest documented edge: the "optimism tax" (Becker, 2026)
+
+The clearest empirical evidence that a real, fee-surviving edge exists comes
+from Jonathan Becker's *The Microstructure of Wealth Transfer in Prediction
+Markets* (72.1M trades, $18.26B volume across Polymarket and Kalshi; public
+36 GB dataset). Its findings reshape this blueprint's primary thesis:
+
+- **Takers overpay for hope.** Takers disproportionately buy cheap "YES"
+  longshots — nearly half of all volume in the longshot price range — chasing
+  large payoffs. Those YES longshots underperform the equivalent NO longshots
+  by **up to 64 percentage points**.
+- **The winner is the maker, not the forecaster.** *"Makers do not need to
+  predict the future; they need only be the counterparty to optimism."* The
+  edge is **execution and flow, not superior prediction** — corroborated by
+  Vedova (2026), *Who Profits from Prediction Markets? Execution, not
+  Information*, and Reichenbach & Walther (2025).
+- **Maker economics make it fee-positive.** On Polymarket makers pay zero
+  trading fees and may earn rebates while takers pay 0.75–1.8% (§0.2). The fee
+  that destroys directional taker edges is exactly what *funds* this one.
+
+**This is now the primary thesis of the system: harvest the optimism tax as a
+passive maker, not beat the market with a forecast.** It resolves the two
+hardest problems in §0 — it does not require winning a forecasting arms race,
+and it is fee-positive rather than fee-negative.
+
+**Two hard caveats — and why the rest of this document still matters:**
+
+1. **The edge is regime-dependent.** Becker's own data shows that from
+   2021–2023 *takers* earned positive excess returns despite the bias; makers
+   only began capturing the optimism tax after the explosive volume growth
+   following Kalshi's October 2024 legal victory. An edge that switched on can
+   switch off. The walk-forward testing (§5), CLV monitoring (§3G), and drift
+   halts (§6.3) are how you detect the regime turning against you — not
+   optional dressing.
+2. **Selling longshots is a fat-tailed payoff** — many small steady gains, rare
+   large losses when the longshot resolves YES. This is the exact profile that
+   blows up an account without hard limits, so Kelly sizing, the per-category
+   correlation cap, and the drawdown halt (§6) matter *more* for a maker than
+   for a forecaster. **Adverse selection** (the longshot buyer is sometimes
+   informed) and **fill risk** (you only trade when someone hits your quote)
+   must be modeled, not assumed away — a historical "counterparty to every
+   taker" backtest overstates achievable returns.
+
+**The synthesis.** Adopt Becker's structural maker edge as the core; drop most
+of the forecasting ML below (it is not where the edge is); keep this blueprint's
+risk and validation discipline, which is precisely what his descriptive
+research lacks for live deployment. Phase 0 (§7) is re-pointed to test the
+optimism tax on Becker's real dataset.
 
 ---
 
@@ -110,6 +164,17 @@ hard gates between them.
 
 > **Build order matters.** Do not build agents 3–10 until Phase 0 proves edge.
 > See §7.
+
+> **Under the optimism-tax thesis (§0.3) this architecture simplifies.** A
+> maker harvesting the longshot bias does not forecast, so the **Stats Model**
+> and **Sentiment Model** agents become optional — the "signal" is simply *a
+> cheap-YES market with one-sided taker flow*. What you keep and strengthen:
+> a **Flow/Microstructure Agent** (identify biased longshot flow and quote the
+> other side), the **Risk + Kelly Agent** (fat-tail control is critical here),
+> the **Calibration/Drift Agent** (detect the regime turning — §0.3 caveat 1),
+> and an **Execution Agent** that places *maker* (limit) orders and tracks fill
+> and adverse-selection rates. Treat the forecasting agents as a later,
+> optional enhancement, not the core.
 
 ### 2.1 The Agents
 
@@ -268,6 +333,7 @@ not require waiting for events to resolve. P&L follows CLV with a lag.
 
 | Source | URL | What it provides | Cost |
 |---|---|---|---|
+| **Becker prediction-market dataset** — *primary for the §0.3 thesis* | github.com/jon-becker/prediction-market-analysis | **72.1M trades, $18.26B volume; trade-level Polymarket + Kalshi data with maker/taker flow** — exactly what the optimism-tax study needs | Free (36 GB) |
 | The Odds API | the-odds-api.com | Historical bookmaker odds (P_market) | Free tier + paid |
 | API-Football | api-football.com | Match results — WIN/LOSS labels | Free tier + paid |
 | stats.nba.com | stats.nba.com/stats/ | NBA game + player stats | Free (no key) |
@@ -393,6 +459,7 @@ are hard circuit breakers encoded into the Risk + Kelly Agent.
 | API error rate > 5% | Halt execution, alert operator | Resume after root cause fixed + tested |
 | Walk-forward Sharpe < 0.8 | Full system halt | Manual review + model rebuild |
 | Devil's Advocate VETO rate > 60% | Investigate model vs. market alignment | Usually signals regime change |
+| **(maker) Realized longshot-hit rate exceeds priced rate over last N fills** | **Halt — you are being adversely selected; the flow is informed, not naive** | Re-estimate fair value; widen quotes; re-run Phase 0 on recent data |
 
 > **THE FUNDAMENTAL RISK PRINCIPLE.** Your edge is real but small — typically
 > 3–8% gross, often far less net. Risk management's job is to ensure you
@@ -412,17 +479,33 @@ fail-fast study first.
 
 **Goal: prove a fee-surviving edge exists before building anything else.**
 
-- Pick **one** edge source (§0.1) and **one** venue as your thesis.
-- Build a minimal data pull: events, `entry_price`, `closing_price`, outcome
-  label. No agents, no database fanciness — a script and a CSV/SQLite is fine.
-- Build a single baseline model (logistic regression or XGBoost) OR, for a
-  speed/arb thesis, just a rule.
-- On a holdout set, measure **CLV** and net EV after realistic fees.
-- **GATE:** per-trade CLV is positive with a 95% CI lower bound > 0 on ≥ 100
-  out-of-sample events, *and* net EV > 0 after fees.
-- **If the gate fails:** stop, or pivot to a different edge source/venue and
-  repeat Phase 0. **Do not proceed to Phase 1.** This is the most important
-  gate in the document — it is designed to kill the project cheaply.
+**Primary thesis (§0.3): the optimism tax, tested on Becker's real dataset.**
+This replaces the original sports favorite-longshot proxy as the lead study —
+Becker's data already contains trade-level maker/taker flow, so no synthetic
+assumptions are needed.
+
+- Download Becker's dataset (github.com/jon-becker/prediction-market-analysis):
+  Polymarket/Kalshi markets + trades in Parquet.
+- Replicate the core finding: bucket resolved contracts by entry price; confirm
+  that cheap "YES" longshots underperform the equivalent "NO" longshots, and
+  size the gap.
+- Simulate the **maker** strategy: act as the counterparty to YES-longshot
+  taker flow, applying **realistic maker economics** (zero/rebate maker fee),
+  a **fill model** (you only trade volume that actually crossed your quote, not
+  every taker), and an **adverse-selection** haircut.
+- Critically, **slice by time period.** Becker shows the edge reversed around
+  the Oct-2024 volume surge — confirm it is present in the *recent* regime, not
+  just pooled across all history.
+- **GATE:** on out-of-sample, *recent-regime* data, the maker strategy's
+  per-trade return after fees has a 95% CI lower bound > 0 on ≥ 100 fills,
+  *and* the result survives the fill + adverse-selection haircut.
+- **If the gate fails:** stop, or pivot edge source/venue and repeat Phase 0.
+  **Do not proceed to Phase 1.** This is the most important gate in the
+  document — it is designed to kill the project cheaply.
+
+> The existing `phase0/` code (sports favorite-longshot, taker side) remains a
+> useful *secondary* cross-check that the bias generalises beyond Polymarket,
+> but the Becker maker study is the gate that matters.
 
 ### Phase 1 — Data Pipeline (Weeks 4–5)
 

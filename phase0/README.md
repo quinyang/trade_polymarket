@@ -1,15 +1,39 @@
 # Phase 0 — Edge Existence Study
 
 **Goal:** before building the full multi-agent system, cheaply prove (or
-disprove) that a fee-surviving edge exists. This phase tests one thesis:
+disprove) that a fee-surviving edge exists. If the Phase 0 gate fails, **stop or
+pivot** — do not start Phase 1. See `trading_ai_blueprint.md` (§0.3, §7) for the
+full rationale.
 
-> **Favorite-longshot bias** — in betting markets, longshots are
-> systematically overpriced and favorites underpriced. The strategy under test
-> is simply: *back favorites*.
+## Primary thesis (updated): the "optimism tax" as a maker
 
-If the Phase 0 gate fails, **stop or pivot** — do not start Phase 1. See the
-revised blueprint (`trading_ai_blueprint.md` on the `claude/review-project-plan-Er319`
-branch) for the full rationale.
+Following Becker's *Microstructure of Wealth Transfer in Prediction Markets*
+(72.1M trades, $18.26B volume), the **primary** Phase 0 study is the optimism
+tax:
+
+> Takers systematically overpay for cheap **"YES" longshots**; those YES
+> longshots underperform the equivalent **"NO" longshots by up to 64 pp**. The
+> edge is captured by the **maker** who sells into that flow — **no forecast
+> required**, and on Polymarket makers pay **zero fees** (takers pay 0.75–1.8%),
+> so the strategy is fee-positive.
+
+The real test runs on **Becker's dataset**
+(github.com/jon-becker/prediction-market-analysis), which contains trade-level
+maker/taker flow. The study must (a) confirm the YES-vs-NO longshot gap, (b)
+simulate the maker side with a **fill model** and **adverse-selection haircut**,
+and (c) **slice by time** — Becker shows the edge reversed around the Oct-2024
+volume surge, so it must be present in the *recent* regime.
+
+> **This Becker maker study is not yet coded** — it is the next deliverable. The
+> code currently in this folder is the secondary cross-check below.
+
+## Secondary cross-check (the code in this folder): favorite-longshot on sports
+
+> **Favorite-longshot bias** — in betting markets, longshots are systematically
+> overpriced and favorites underpriced. The strategy under test is *back
+> favorites* (the taker-side, sports-odds version of the same bias). It is a
+> useful confirmation that the bias generalises beyond Polymarket, but it is
+> **not** the gate that matters.
 
 ## Files
 

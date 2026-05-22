@@ -223,7 +223,15 @@ Above 0.22 triggers automatic retraining and halts new trades.
 
 ## 3. Mathematical Methods
 
-### 3A. Probability Estimation
+> **Two paths — and the maker path skips most of this section.** The methods in
+> §3A–§3B (Bayesian updating, logistic/ML probability estimation, calibration,
+> per-event edge) belong to the **forecasting** approach: estimate the *true*
+> probability of each event and bet when it differs from the price. Under the
+> **maker / optimism-tax thesis (§0.3) — the primary thesis — you do not need
+> them.** See §3A.1 for why. Kelly sizing (§3C), the fee-aware EV filter (§3D),
+> arbitrage (§3E), and all metrics (§3F–§3G) apply to **both** paths.
+
+### 3A. Probability Estimation (forecasting path)
 
 **Bayesian Updating.** Start with a prior probability (historical base rate)
 and update it as evidence arrives.
@@ -244,6 +252,76 @@ Train with GradientBoostingClassifier or XGBoost. Calibrate with
 `CalibratedClassifierCV(method='isotonic')`. Calibration is mandatory — raw
 model scores are not true probabilities.
 
+*How to read the formula:* `z = β₀ + β₁x₁ + … + βₙxₙ` is a weighted score of the
+features (each `βᵢ` is the change in **log-odds** per unit of `xᵢ`); the sigmoid
+`1/(1+e^−z)` squashes that score into a (0,1) probability, with `z = 0 → 0.50`.
+XGBoost replaces the single linear `z` with a tree ensemble, so its raw output
+ranks well but is **overconfident** — hence the mandatory isotonic calibration
+step, which re-maps raw scores to the frequencies actually observed on held-out
+data. Without it, `P_model` is wrong and every downstream edge is fictional.
+
+### 3A.1 Why the maker path needs neither estimation nor calibration
+
+The forecasting path above asks the hardest question in the system: *"what is
+the true probability of this specific event?"* On a liquid market the price
+already aggregates sharp money, so you rarely win that contest. The **maker /
+optimism-tax thesis sidesteps the question entirely.** It does not predict
+individual events; it harvests a statistical regularity across thousands of
+trades. You are the **house**, not the gambler — an insurer who cannot predict
+which house burns down but prices the whole book to profit.
+
+Three reasons the ML stack falls away under the maker thesis:
+
+1. **The calibration already exists, empirically.** Becker's price → realized-
+   frequency curve (5¢ → 4.18%, 1¢ → 0.43%, see §3A.2) *is* the calibrated
+   probability, read straight off 72M trades. The price is the input; the
+   historical frequency at that price is the answer. There is no per-event
+   model to fit, so there is nothing to calibrate.
+2. **Half the edge is pure microstructure.** The maker +1.12% / taker −1.12%
+   spread (§0.3) comes from *who pays the fee and who supplies liquidity* — zero
+   forecasting content. No model can create or erase it.
+3. **Law of large numbers replaces prediction.** A small positive expectation
+   per trade × many near-independent trades = reliable aggregate profit. No
+   single bet has to be "right."
+
+**Why this is simpler:** no feature engineering, no model training/retraining,
+no isotonic pipeline, and **no lookahead-bias exposure** (you build no
+time-stamped features at all). The hard problem moves from *forecast better than
+the market* (near-impossible) to *execute as a disciplined maker and manage
+inventory + adverse selection* (operationally hard but tractable).
+
+**What does NOT vanish — calibration becomes a warning light, not the engine.**
+You still (a) estimate the mispricing curve **per category** (the bias is ~40×
+stronger in Sports/Crypto than Finance — §3A.2), (b) **monitor** that realized
+frequencies still track the historical curve, which is calibration repurposed as
+a health check and a regime-drift alarm (§0.3 caveat 1, §6.3), and (c) defend
+against **adverse selection** — sometimes the cheap-YES buyer is informed.
+
+### 3A.2 The empirical mispricing curve and category map (the maker's "model")
+
+These replace the trained model for the maker path. Estimate both from Becker's
+dataset (§4.1), refresh on recent data, and treat them as the live edge map.
+
+**Longshot mispricing (price → realized YES frequency), illustrative:**
+
+| Quoted YES price | Realized YES frequency | Implication |
+|---|---|---|
+| 1¢ | ~0.43% | YES grossly overpriced — sell YES / buy NO |
+| 5¢ | ~4.18% | YES overpriced |
+| … | (estimate the full curve per category) | NO outperforms YES at ~69 of 99 price levels |
+
+**Category edge (maker−taker spread, the optimism tax by category):**
+
+| Category | Maker−taker gap | For a maker bot |
+|---|---|---|
+| Finance | ~0.17 pp | Nearly efficient — avoid |
+| Politics / Tech | ~1 pp | Marginal |
+| Sports / Crypto | high | Target |
+| Entertainment / World Events | ~4.8–7.3 pp | Strongest — prioritise |
+
+**Taker-side corollary:** if you must cross the spread below ~30¢, **buy NO, not
+YES** — you ride the bias instead of paying it.
+
 ### 3B. Edge Calculation
 
 **FORMULA — Edge**
@@ -252,6 +330,11 @@ Edge = P_model − P_market
 ```
 Only trade when **net** edge (after fees and expected slippage) exceeds the
 threshold. See §3D — gross edge is not tradable.
+
+`P_model` differs by path: on the **forecasting path** it is the calibrated ML
+output (§3A); on the **maker path** it is simply the empirical realized
+frequency at that price/category from the mispricing curve (§3A.2) — no model
+required. The edge then comes from that curve *plus* the maker fee advantage.
 
 ### 3C. Kelly Criterion — Optimal Position Sizing
 

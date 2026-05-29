@@ -3,5 +3,6 @@ __pycache__/
 .env
 phase0/data/
 phase0/REPORT.md
+phase0/REPORT_BECKER.md
 .venv/
 venv/

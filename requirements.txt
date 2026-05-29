@@ -1,3 +1,6 @@
 numpy>=1.26
 scipy>=1.11
 requests>=2.31
+# Becker maker study (becker_study.py): reading the Parquet dataset
+pandas>=2.0
+pyarrow>=14.0
